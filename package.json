@@ -67,6 +67,7 @@
     "mocha": "^11.0.1",
     "octokit": "^4.1.0",
     "template-literal": "^1.0.4",
+    "tone": "^15.1.22",
     "webidl2": "^24.2.0",
     "wpt-runner": "^5.0.0"
   },
