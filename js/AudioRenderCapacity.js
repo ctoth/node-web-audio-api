@@ -85,7 +85,7 @@ class AudioRenderCapacity extends EventTarget {
       throw new TypeError(`Invalid Invocation: Value of 'this' must be of type 'AudioRenderCapacity'`);
     }
 
-    return this[kNapiObj].start();
+    return this[kNapiObj].stop();
   }
 }
 
