@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const path = require('node:path');
 const { platform, arch } = process;
 
 let nativeBinding = null;
@@ -81,11 +82,11 @@ switch (platform) {
 }
 
 // use local build if exists
-if (fs.existsSync('node-web-audio-api.build-release.node')) {
+if (fs.existsSync(path.join(__dirname, 'node-web-audio-api.build-release.node'))) {
   nativeBinding = require('./node-web-audio-api.build-release.node');
 }
 
-if (fs.existsSync('node-web-audio-api.build-debug.node')) {
+if (fs.existsSync(path.join(__dirname, 'node-web-audio-api.build-debug.node'))) {
   nativeBinding = require('./node-web-audio-api.build-debug.node');
 }
 
