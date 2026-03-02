@@ -140,8 +140,8 @@ Cargo.lock
 
 *.zip
 *.node
+!node-web-audio-api.build-release.node
 
 *.test.yml
 
 *.env
-
