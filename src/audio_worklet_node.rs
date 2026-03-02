@@ -2,7 +2,7 @@ use crate::{NapiAudioContext, NapiAudioParam, NapiOfflineAudioContext};
 
 use crossbeam_channel::{self, Receiver, Sender};
 
-use napi::bindgen_prelude::Array;
+use napi::bindgen_prelude::{Array, FromNapiValue};
 use napi::*;
 use napi_derive::js_function;
 
@@ -220,35 +220,74 @@ fn recycle_processor(env: &Env, processor: JsObject) -> Result<()> {
         global.get_property::<JsSymbol, JsFunction>(k_worklet_recycle_buffer_1)?;
 
     let k_worklet_inputs = env.symbol_for("node-web-audio-api:worklet-inputs")?;
-    let js_inputs = processor.get_property::<JsSymbol, JsObject>(k_worklet_inputs)?;
+    let js_inputs = processor.get_property::<JsSymbol, JsUnknown>(k_worklet_inputs)?;
 
-    for i in 0..js_inputs.get_array_length_unchecked()? {
-        let input = js_inputs.get_element::<JsObject>(i)?;
-        for j in 0..input.get_array_length_unchecked()? {
-            let channel = input.get_element::<JsTypedArray>(j)?;
-            let _ = recycle_buffer.call1::<JsTypedArray, JsUndefined>(channel)?;
+    if js_inputs.get_type()? != ValueType::Undefined {
+        let js_inputs = js_inputs.coerce_to_object()?;
+
+        for i in 0..js_inputs.get_array_length_unchecked()? {
+            let input = js_inputs.get_element::<JsObject>(i)?;
+            for j in 0..input.get_array_length_unchecked()? {
+                let channel = input.get_element::<JsTypedArray>(j)?;
+                let _ = recycle_buffer.call1::<JsTypedArray, JsUndefined>(channel)?;
+            }
         }
     }
 
     let k_worklet_outputs = env.symbol_for("node-web-audio-api:worklet-outputs")?;
-    let js_outputs = processor.get_property::<JsSymbol, JsObject>(k_worklet_outputs)?;
+    let js_outputs = processor.get_property::<JsSymbol, JsUnknown>(k_worklet_outputs)?;
 
-    for i in 0..js_outputs.get_array_length_unchecked()? {
-        let output = js_outputs.get_element::<JsObject>(i)?;
-        for j in 0..output.get_array_length_unchecked()? {
-            let channel = output.get_element::<JsTypedArray>(j)?;
-            let _ = recycle_buffer.call1::<JsTypedArray, JsUndefined>(channel)?;
+    if js_outputs.get_type()? != ValueType::Undefined {
+        let js_outputs = js_outputs.coerce_to_object()?;
+
+        for i in 0..js_outputs.get_array_length_unchecked()? {
+            let output = js_outputs.get_element::<JsObject>(i)?;
+            for j in 0..output.get_array_length_unchecked()? {
+                let channel = output.get_element::<JsTypedArray>(j)?;
+                let _ = recycle_buffer.call1::<JsTypedArray, JsUndefined>(channel)?;
+            }
         }
     }
 
     let k_worklet_params_cache = env.symbol_for("node-web-audio-api:worklet-params-cache")?;
-    let js_params_cache = processor.get_property::<JsSymbol, JsObject>(k_worklet_params_cache)?;
+    let js_params_cache = processor.get_property::<JsSymbol, JsUnknown>(k_worklet_params_cache)?;
 
-    let param_cache_128 = js_params_cache.get_element::<JsTypedArray>(0)?;
-    let _ = recycle_buffer.call1::<JsTypedArray, JsUndefined>(param_cache_128)?;
+    if js_params_cache.get_type()? != ValueType::Undefined {
+        let js_params_cache = js_params_cache.coerce_to_object()?;
+        let param_keys = js_params_cache.get_all_property_names(
+            KeyCollectionMode::OwnOnly,
+            KeyFilter::Enumerable,
+            KeyConversion::NumbersToStrings,
+        )?;
+        let length = param_keys.get_array_length()?;
 
-    let param_cache_1 = js_params_cache.get_element::<JsTypedArray>(1)?;
-    let _ = recycle_buffer_1.call1::<JsTypedArray, JsUndefined>(param_cache_1)?;
+        for i in 0..length {
+            let key = param_keys.get_element::<JsString>(i)?;
+            let cache_pair = js_params_cache.get_property::<JsString, JsUnknown>(key)?;
+
+            if cache_pair.get_type()? == ValueType::Undefined {
+                continue;
+            }
+
+            let cache_pair = cache_pair.coerce_to_object()?;
+
+            for cache_index in 0..cache_pair.get_array_length_unchecked()? {
+                let cache = cache_pair.get_element::<JsUnknown>(cache_index)?;
+
+                if cache.get_type()? == ValueType::Undefined {
+                    continue;
+                }
+
+                let cache = JsTypedArray::from_unknown(cache)?;
+
+                if cache_index == 0 {
+                    let _ = recycle_buffer.call1::<JsTypedArray, JsUndefined>(cache)?;
+                } else {
+                    let _ = recycle_buffer_1.call1::<JsTypedArray, JsUndefined>(cache)?;
+                }
+            }
+        }
+    }
 
     Ok(())
 }
@@ -442,9 +481,16 @@ pub(crate) fn run_audio_worklet_global_scope(ctx: CallContext) -> Result<JsUndef
     }
 
     // Obtain the unique worker ID
-    let worklet_id = ctx.get::<JsNumber>(0)?.get_uint32()? as usize;
+    let worklet_id = ctx
+        .get::<JsNumber>(0)
+        .map_err(|err| Error::from_reason(format!("runLoop arg0: {err}")))?
+        .get_uint32()
+        .map_err(|err| Error::from_reason(format!("runLoop arg0 uint32: {err}")))?
+        as usize;
     // List of registered processors
-    let processors = ctx.get::<JsObject>(1)?;
+    let processors = ctx
+        .get::<JsObject>(1)
+        .map_err(|err| Error::from_reason(format!("runLoop arg1 processors: {err}")))?;
 
     // Poll for incoming commands and yield back to the event loop if there are none.
     // recv_timeout is not an option due to realtime safety, see discussion of
@@ -452,15 +498,30 @@ pub(crate) fn run_audio_worklet_global_scope(ctx: CallContext) -> Result<JsUndef
     while let Ok(msg) = process_call_receiver(worklet_id).try_recv() {
         match msg {
             WorkletCommand::Drop(id) => {
-                let mut processors = ctx.get::<JsObject>(1)?;
+                let mut processors = ctx
+                    .get::<JsObject>(1)
+                    .map_err(|err| Error::from_reason(format!("drop {id} processors: {err}")))?;
                 // recycle all processor buffers
-                let processor = processors.get_named_property::<JsObject>(&id.to_string())?;
-                recycle_processor(ctx.env, processor)?;
+                let processor = processors
+                    .get_named_property::<JsUnknown>(&id.to_string())
+                    .map_err(|err| Error::from_reason(format!("drop {id} lookup: {err}")))?;
 
-                processors.delete_named_property(&id.to_string())?;
+                if processor.get_type()? != ValueType::Undefined {
+                    let processor = processor
+                        .coerce_to_object()
+                        .map_err(|err| Error::from_reason(format!("drop {id} coerce: {err}")))?;
+                    recycle_processor(ctx.env, processor)
+                        .map_err(|err| Error::from_reason(format!("drop {id} recycle: {err}")))?;
+                }
+
+                processors
+                    .delete_named_property(&id.to_string())
+                    .map_err(|err| Error::from_reason(format!("drop {id} delete: {err}")))?;
             }
             WorkletCommand::Process(args) => {
-                process_audio_worklet(ctx.env, &processors, args)?;
+                let process_id = args.id;
+                process_audio_worklet(ctx.env, &processors, args)
+                    .map_err(|err| Error::from_reason(format!("process {process_id}: {err}")))?;
             }
         }
     }

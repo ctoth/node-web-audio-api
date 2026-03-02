@@ -98,7 +98,7 @@ use crate::media_devices::napi_enumerate_devices;
 use crate::media_devices::napi_get_user_media;
 
 #[cfg(all(
-    any(windows, unix),
+    unix,
     target_arch = "x86_64",
     not(target_env = "musl"),
     not(debug_assertions)

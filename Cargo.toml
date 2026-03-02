@@ -17,7 +17,7 @@ thread-priority = "1.2"
 web-audio-api = "1.2"
 # web-audio-api = { path = "../web-audio-api-rs" }
 
-[target.'cfg(all(any(windows, unix), target_arch = "x86_64", not(target_env = "musl")))'.dependencies]
+[target.'cfg(all(unix, target_arch = "x86_64", not(target_env = "musl")))'.dependencies]
 mimalloc = { version = "0.1" }
 
 [build-dependencies]

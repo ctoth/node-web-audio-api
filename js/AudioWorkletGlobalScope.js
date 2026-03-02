@@ -3,6 +3,7 @@ const {
   workerData,
   markAsUntransferable,
 } = require('node:worker_threads');
+const { pathToFileURL } = require('node:url');
 
 const conversions = require('webidl-conversions');
 
@@ -112,6 +113,16 @@ function runLoop() {
   run_audio_worklet_global_scope(workletId, processors);
   // yield to the event loop, and then repeat
   runLoopImmediateId = setImmediate(runLoop);
+}
+
+function toImportSpecifier(moduleUrl) {
+  if (typeof moduleUrl !== 'string') {
+    return moduleUrl;
+  }
+  if (/^[A-Za-z]:[\\/]/.test(moduleUrl)) {
+    return pathToFileURL(moduleUrl).href;
+  }
+  return moduleUrl;
 }
 
 globalThis.currentTime = 0;
@@ -316,7 +327,7 @@ parentPort.on('message', async event => {
         // 2. If module is a blob or loaded from an URL, we use the raw text as
         //    input. In this case, if the module uses `import` it will crash
         if (moduleUrl !== null) {
-          await import(moduleUrl);
+          await import(toImportSpecifier(moduleUrl));
         } else {
           await import(`data:text/javascript;base64,${btoa(unescape(encodeURIComponent(code)))}`);
         }
